@@ -2,6 +2,9 @@
 #include <emscripten.h>
 #include <sqlite3.h>
 
+// Statically linked TreeCRDT extension auto-registrar.
+void treecrdt_register_auto(void);
+
 // Some SQLite API functions take a pointer to a function that frees
 // memory. Although we could add a C binding to a JavaScript function
 // that calls sqlite3_free(), it is more efficient to pass the sqlite3_free
@@ -13,5 +16,6 @@ void* EMSCRIPTEN_KEEPALIVE getSqliteFree() {
 
 int main() {
   sqlite3_initialize();
+  treecrdt_register_auto();
   return 0;
 }
