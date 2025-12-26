@@ -35,6 +35,13 @@ EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
 JSPI_EXPORTS = src/jspi_exports.json
 TREECRDT_LIB = ../../target/wasm32-unknown-emscripten/release/libtreecrdt_sqlite_ext.a
+TREECRDT_SRC = \
+	../../Cargo.toml \
+	../../Cargo.lock \
+	../../packages/treecrdt-sqlite-ext/Cargo.toml \
+	../../packages/treecrdt-sqlite-ext/src/lib.rs \
+	../../packages/treecrdt-sqlite-ext/src/extension.rs \
+	../../packages/treecrdt-sqlite-ext/src/storage.rs
 
 # intermediate files
 OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
@@ -167,7 +174,7 @@ tmp/obj/dist/%.o: %.c
 	mkdir -p tmp/obj/dist
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
-$(TREECRDT_LIB):
+$(TREECRDT_LIB): $(TREECRDT_SRC)
 	cd ../.. && cargo build -p treecrdt-sqlite-ext --target wasm32-unknown-emscripten --release --no-default-features --features static-link
 
 ## debug
