@@ -7,7 +7,12 @@ EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-func
 EXTENSION_FUNCTIONS_SHA3 = ee39ddf5eaa21e1d0ebcbceeab42822dd0c4f82d8039ce173fd4814807faabfa
 
 # source files
-CFILES_EXTRA = treecrdt-ext.c
+# Optional extra sources/libs for downstream integrations.
+# Prefer passing basenames in CFILES_EXTRA and using VPATH_EXTRA to locate them.
+CFILES_EXTRA ?=
+LIBS_EXTRA ?=
+DEPS_EXTRA ?=
+VPATH_EXTRA ?=
 CFILES = \
 	sqlite3.c \
 	extension-functions.c \
@@ -26,22 +31,13 @@ JSFILES = \
 	src/libprogress.js \
 	src/libvfs.js
 
-vpath %.c src
-vpath %.c deps
-vpath %.c deps/$(SQLITE_VERSION)
+VPATH_C = src deps deps/$(SQLITE_VERSION) $(VPATH_EXTRA)
+vpath %.c $(VPATH_C)
 
 EXPORTED_FUNCTIONS = src/exported_functions.json
 EXPORTED_RUNTIME_METHODS = src/extra_exported_runtime_methods.json
 ASYNCIFY_IMPORTS = src/asyncify_imports.json
 JSPI_EXPORTS = src/jspi_exports.json
-TREECRDT_LIB = ../../target/wasm32-unknown-emscripten/release/libtreecrdt_sqlite_ext.a
-TREECRDT_SRC = \
-	../../Cargo.toml \
-	../../Cargo.lock \
-	../../packages/treecrdt-sqlite-ext/Cargo.toml \
-	../../packages/treecrdt-sqlite-ext/src/lib.rs \
-	../../packages/treecrdt-sqlite-ext/src/extension.rs \
-	../../packages/treecrdt-sqlite-ext/src/storage.rs
 
 # intermediate files
 OBJ_FILES_DEBUG = $(patsubst %.c,tmp/obj/debug/%.o,$(CFILES))
@@ -123,16 +119,19 @@ WASQLITE_DEFINES = \
 	$(WASQLITE_EXTRA_DEFINES)
 
 # directories
+DIST_DIR ?= dist
+DEBUG_DIR ?= debug
+
 .PHONY: all
 all: dist
 
 .PHONY: clean
 clean:
-	rm -rf dist debug tmp
+	rm -rf $(DIST_DIR) $(DEBUG_DIR) tmp
 
 .PHONY: spotless
 spotless:
-	rm -rf dist debug tmp deps cache
+	rm -rf $(DIST_DIR) $(DEBUG_DIR) tmp deps cache
 
 ## cache
 .PHONY: clean-cache
@@ -174,67 +173,64 @@ tmp/obj/dist/%.o: %.c
 	mkdir -p tmp/obj/dist
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
 
-$(TREECRDT_LIB): $(TREECRDT_SRC)
-	cd ../.. && cargo build -p treecrdt-sqlite-ext --target wasm32-unknown-emscripten --release --no-default-features --features static-link
-
 ## debug
 .PHONY: clean-debug
 clean-debug:
-	rm -rf debug
+	rm -rf $(DEBUG_DIR)
 
 .PHONY: debug
-debug: debug/wa-sqlite.mjs debug/wa-sqlite-async.mjs debug/wa-sqlite-jspi.mjs
+debug: $(DEBUG_DIR)/wa-sqlite.mjs $(DEBUG_DIR)/wa-sqlite-async.mjs $(DEBUG_DIR)/wa-sqlite-jspi.mjs
 
-debug/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(TREECRDT_LIB)
-	mkdir -p debug
+$(DEBUG_DIR)/wa-sqlite.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(DEPS_EXTRA)
+	mkdir -p $(DEBUG_DIR)
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
-	  $(OBJ_FILES_DEBUG) $(TREECRDT_LIB) -o $@
+	  $(OBJ_FILES_DEBUG) $(LIBS_EXTRA) -o $@
 
-debug/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(TREECRDT_LIB)
-	mkdir -p debug
+$(DEBUG_DIR)/wa-sqlite-async.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(DEPS_EXTRA)
+	mkdir -p $(DEBUG_DIR)
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DEBUG) \
-	  $(OBJ_FILES_DEBUG) $(TREECRDT_LIB) -o $@
+	  $(OBJ_FILES_DEBUG) $(LIBS_EXTRA) -o $@
 
-debug/wa-sqlite-jspi.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(TREECRDT_LIB)
-	mkdir -p debug
+$(DEBUG_DIR)/wa-sqlite-jspi.mjs: $(OBJ_FILES_DEBUG) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(DEPS_EXTRA)
+	mkdir -p $(DEBUG_DIR)
 	$(EMCC) $(EMFLAGS_DEBUG) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_JSPI) \
-	  $(OBJ_FILES_DEBUG) $(TREECRDT_LIB) -o $@
+	  $(OBJ_FILES_DEBUG) $(LIBS_EXTRA) -o $@
 
 ## dist
 .PHONY: clean-dist
 clean-dist:
-	rm -rf dist
+	rm -rf $(DIST_DIR)
 
 .PHONY: dist
-dist: dist/wa-sqlite.mjs dist/wa-sqlite-async.mjs dist/wa-sqlite-jspi.mjs
+dist: $(DIST_DIR)/wa-sqlite.mjs $(DIST_DIR)/wa-sqlite-async.mjs $(DIST_DIR)/wa-sqlite-jspi.mjs
 
-dist/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(TREECRDT_LIB)
-	mkdir -p dist
+$(DIST_DIR)/wa-sqlite.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(DEPS_EXTRA)
+	mkdir -p $(DIST_DIR)
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
-	  $(OBJ_FILES_DIST) $(TREECRDT_LIB) -o $@
+	  $(OBJ_FILES_DIST) $(LIBS_EXTRA) -o $@
 
-dist/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(TREECRDT_LIB)
-	mkdir -p dist
+$(DIST_DIR)/wa-sqlite-async.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(DEPS_EXTRA)
+	mkdir -p $(DIST_DIR)
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DIST) \
-	  $(OBJ_FILES_DIST) $(TREECRDT_LIB) -o $@
+	  $(OBJ_FILES_DIST) $(LIBS_EXTRA) -o $@
 
-dist/wa-sqlite-jspi.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(TREECRDT_LIB)
-	mkdir -p dist
+$(DIST_DIR)/wa-sqlite-jspi.mjs: $(OBJ_FILES_DIST) $(JSFILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS) $(DEPS_EXTRA)
+	mkdir -p $(DIST_DIR)
 	$(EMCC) $(EMFLAGS_DIST) \
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_JSPI) \
-	  $(OBJ_FILES_DIST) $(TREECRDT_LIB) -o $@
+	  $(OBJ_FILES_DIST) $(LIBS_EXTRA) -o $@
