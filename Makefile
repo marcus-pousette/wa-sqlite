@@ -1,6 +1,9 @@
 # dependencies
 SQLITE_VERSION = version-3.53.0
-SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/$(SQLITE_VERSION)/sqlite.tar.gz
+# Prefer the release snapshot because the SQLite Fossil endpoint has intermittently returned 503 in CI.
+SQLITE_SRC_ZIP_URLS = \
+	https://www.sqlite.org/2026/sqlite-src-3530000.zip \
+	https://github.com/sqlite/sqlite/archive/refs/tags/$(SQLITE_VERSION).zip
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
@@ -149,8 +152,23 @@ clean-deps:
 	rm -rf deps
 
 deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c:
+	rm -rf cache/$(SQLITE_VERSION)
 	mkdir -p cache/$(SQLITE_VERSION)
-	curl -LsS $(SQLITE_TARBALL_URL) | tar -xzf - -C cache/$(SQLITE_VERSION)/ --strip-components=1
+	set -e; \
+	downloaded=; \
+	for url in $(SQLITE_SRC_ZIP_URLS); do \
+		rm -f cache/$(SQLITE_VERSION)/sqlite-src.zip; \
+		if curl -LsSf --retry 8 --retry-delay 2 --retry-all-errors -o cache/$(SQLITE_VERSION)/sqlite-src.zip "$$url"; then \
+			downloaded=1; \
+			break; \
+		fi; \
+	done; \
+	test -n "$$downloaded"
+	unzip -q -o cache/$(SQLITE_VERSION)/sqlite-src.zip -d cache/$(SQLITE_VERSION)
+	src_root=$$(find cache/$(SQLITE_VERSION) -mindepth 1 -maxdepth 1 -type d | head -n 1); \
+	test -n "$$src_root"; \
+	mv "$$src_root"/* cache/$(SQLITE_VERSION)/
+	rm -rf "$$src_root" cache/$(SQLITE_VERSION)/sqlite-src.zip
 	mkdir -p deps/$(SQLITE_VERSION)
 	(cd deps/$(SQLITE_VERSION); ../../cache/$(SQLITE_VERSION)/configure --enable-all && make sqlite3.c)
 
