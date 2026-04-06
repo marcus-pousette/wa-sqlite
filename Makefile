@@ -1,8 +1,9 @@
 # dependencies
 SQLITE_VERSION = version-3.50.1
 # Prefer the release zip snapshot over `/src/tarball/…`, which has intermittently returned 503 "Server Overload" in CI.
-SQLITE_SRC_ZIP_URL = https://www.sqlite.org/2025/sqlite-src-3500100.zip
-SQLITE_SRC_ZIP_ROOT = sqlite-src-3500100
+SQLITE_SRC_ZIP_URLS = \
+	https://www.sqlite.org/2025/sqlite-src-3500100.zip \
+	https://github.com/sqlite/sqlite/archive/refs/tags/version-3.50.1.zip
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
@@ -152,10 +153,17 @@ clean-deps:
 deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c:
 	rm -rf cache/$(SQLITE_VERSION)
 	mkdir -p cache/$(SQLITE_VERSION)
-	curl -LsSf --retry 8 --retry-delay 2 --retry-all-errors -o cache/$(SQLITE_VERSION)/sqlite-src.zip $(SQLITE_SRC_ZIP_URL)
+	set -e; \
+	for url in $(SQLITE_SRC_ZIP_URLS); do \
+		if curl -LsSf --retry 8 --retry-delay 2 --retry-all-errors -o cache/$(SQLITE_VERSION)/sqlite-src.zip "$$url"; then \
+			break; \
+		fi; \
+	done
 	unzip -q -o cache/$(SQLITE_VERSION)/sqlite-src.zip -d cache/$(SQLITE_VERSION)
-	mv cache/$(SQLITE_VERSION)/$(SQLITE_SRC_ZIP_ROOT)/* cache/$(SQLITE_VERSION)/
-	rm -rf cache/$(SQLITE_VERSION)/$(SQLITE_SRC_ZIP_ROOT) cache/$(SQLITE_VERSION)/sqlite-src.zip
+	src_root=$$(find cache/$(SQLITE_VERSION) -mindepth 1 -maxdepth 1 -type d | head -n 1); \
+	test -n "$$src_root"; \
+	mv "$$src_root"/* cache/$(SQLITE_VERSION)/
+	rm -rf "$$src_root" cache/$(SQLITE_VERSION)/sqlite-src.zip
 	mkdir -p deps/$(SQLITE_VERSION)
 	(cd deps/$(SQLITE_VERSION); ../../cache/$(SQLITE_VERSION)/configure --enable-all && make sqlite3.c)
 
