@@ -1,5 +1,6 @@
 [
   "_RegisterExtensionFunctions",
+  "_treecrdt_sqlite_init",
   "_main",
   "_malloc",
   "_free",
