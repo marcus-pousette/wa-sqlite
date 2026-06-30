@@ -1,9 +1,9 @@
 # dependencies
-SQLITE_VERSION = version-3.50.1
+SQLITE_VERSION = version-3.53.0
 # Prefer the release zip snapshot over `/src/tarball/…`, which has intermittently returned 503 "Server Overload" in CI.
 SQLITE_SRC_ZIP_URLS = \
-	https://www.sqlite.org/2025/sqlite-src-3500100.zip \
-	https://github.com/sqlite/sqlite/archive/refs/tags/version-3.50.1.zip
+	https://www.sqlite.org/2026/sqlite-src-3530000.zip \
+	https://github.com/sqlite/sqlite/archive/refs/tags/version-3.53.0.zip
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
@@ -52,6 +52,7 @@ EMCC ?= emcc
 CFLAGS_COMMON = \
 	-I'deps/$(SQLITE_VERSION)' \
 	-Wno-non-literal-null-conversion \
+	-DSQLITE_EXPERIMENTAL_PRAGMA_20251114 \
 	$(CFLAGS_EXTRA)
 CFLAGS_DEBUG = -g $(CFLAGS_COMMON)
 CFLAGS_DIST =  -Oz -flto $(CFLAGS_COMMON)
