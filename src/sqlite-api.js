@@ -493,10 +493,30 @@ export function Factory(Module) {
         const rc = await retry(() => f(zFilename, tmpPtr[0], flags, zVfs));
 
         const db = Module.getValue(tmpPtr[0], '*');
-        databases.add(db);
+        if (rc !== SQLite.SQLITE_OK) {
+          // sqlite3_open_v2 usually returns a database handle even when opening fails.
+          // Preserve the original error before closing that handle, since close may
+          // replace the connection's error message.
+          const message = db ?
+            Module.ccall('sqlite3_errmsg', 'string', ['number'], [db]) :
+            fname;
+          const error = new SQLiteError(message, rc);
 
+          if (db) {
+            databases.add(db);
+            try {
+              await sqlite3.close(db);
+            } catch {
+              // Preserve the open error. Closing an errored handle is best effort.
+            } finally {
+              databases.delete(db);
+            }
+          }
+          throw error;
+        }
+
+        databases.add(db);
         Module.ccall('RegisterExtensionFunctions', 'void', ['number'], [db]);
-        check(fname, rc);
         return db;
       } finally {
         Module._sqlite3_free(zVfs);
