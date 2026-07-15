@@ -1,8 +1,6 @@
 # dependencies
-SQLITE_VERSION = version-3.50.1
-# Prefer the release zip snapshot over `/src/tarball/…`, which has intermittently returned 503 "Server Overload" in CI.
-SQLITE_SRC_ZIP_URL = https://www.sqlite.org/2025/sqlite-src-3500100.zip
-SQLITE_SRC_ZIP_ROOT = sqlite-src-3500100
+SQLITE_VERSION = version-3.53.0
+SQLITE_TARBALL_URL = https://www.sqlite.org/src/tarball/$(SQLITE_VERSION)/sqlite.tar.gz
 
 EXTENSION_FUNCTIONS = extension-functions.c
 EXTENSION_FUNCTIONS_URL = https://www.sqlite.org/contrib/download/extension-functions.c?get=25
@@ -51,6 +49,7 @@ EMCC ?= emcc
 CFLAGS_COMMON = \
 	-I'deps/$(SQLITE_VERSION)' \
 	-Wno-non-literal-null-conversion \
+	-DSQLITE_EXPERIMENTAL_PRAGMA_20251114 \
 	$(CFLAGS_EXTRA)
 CFLAGS_DEBUG = -g $(CFLAGS_COMMON)
 CFLAGS_DIST =  -Oz -flto $(CFLAGS_COMMON)
@@ -150,19 +149,15 @@ clean-deps:
 	rm -rf deps
 
 deps/$(SQLITE_VERSION)/sqlite3.h deps/$(SQLITE_VERSION)/sqlite3.c:
-	rm -rf cache/$(SQLITE_VERSION)
 	mkdir -p cache/$(SQLITE_VERSION)
-	curl -LsSf --retry 8 --retry-delay 2 --retry-all-errors -o cache/$(SQLITE_VERSION)/sqlite-src.zip $(SQLITE_SRC_ZIP_URL)
-	unzip -q -o cache/$(SQLITE_VERSION)/sqlite-src.zip -d cache/$(SQLITE_VERSION)
-	mv cache/$(SQLITE_VERSION)/$(SQLITE_SRC_ZIP_ROOT)/* cache/$(SQLITE_VERSION)/
-	rm -rf cache/$(SQLITE_VERSION)/$(SQLITE_SRC_ZIP_ROOT) cache/$(SQLITE_VERSION)/sqlite-src.zip
+	curl -LsS $(SQLITE_TARBALL_URL) | tar -xzf - -C cache/$(SQLITE_VERSION)/ --strip-components=1
 	mkdir -p deps/$(SQLITE_VERSION)
 	(cd deps/$(SQLITE_VERSION); ../../cache/$(SQLITE_VERSION)/configure --enable-all && make sqlite3.c)
 
 deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 	mkdir -p deps
 	openssl dgst -sha3-256 -r cache/$(EXTENSION_FUNCTIONS) | sed -e 's/\s.*//' > deps/sha3
-	echo $(EXTENSION_FUNCTIONS_SHA3) | cmp -s - deps/sha3 || echo "warning: extension-functions sha3 mismatch, continuing"
+	echo $(EXTENSION_FUNCTIONS_SHA3) | cmp deps/sha3
 	rm -rf deps/sha3 $@
 	cp 'cache/$(EXTENSION_FUNCTIONS)' $@
 
@@ -178,6 +173,7 @@ tmp/obj/debug/%.o: %.c
 tmp/obj/dist/%.o: %.c
 	mkdir -p tmp/obj/dist
 	$(EMCC) $(CFLAGS_DIST) $(WASQLITE_DEFINES) $^ -c -o $@
+
 
 ## debug
 .PHONY: clean-debug
